@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.npy
+*.zip
+results/night_game_*.json
+results/night_log.txt
+results/night_stdout.txt
+results/night_state.json
+results/power_*.json
+playwright-report/
+test-results/
+.DS_Store
+.idea/
+.vscode/
