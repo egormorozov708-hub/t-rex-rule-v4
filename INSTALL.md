@@ -5,9 +5,8 @@ python -m pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
-Быстрый режим (`fast_env.py`) запускает системный Google Chrome через
-`channel="chrome"` — он должен быть установлен. Реальный режим (`watch.py`)
-использует браузер Playwright.
+Требуется системный Google Chrome: оба режима (`fast_env.py`, `watch.py`)
+запускают его через `channel="chrome"`, fallback на bundled Chromium нет.
 
 Проверка установки (одна игра, 3000 кадров, ожидаемый результат `22495.5`):
 

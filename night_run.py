@@ -16,7 +16,7 @@ import statistics
 import subprocess
 import sys
 import time
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -70,9 +70,10 @@ def save_state(st):
 
 def game_mode(seed):
     sys.path.insert(0, str(ROOT))
-    from parity_v4 import js_side
-    from fast_env import DT, browser_ctx, make_page
     from playwright.sync_api import sync_playwright
+
+    from fast_env import browser_ctx, make_page
+    from parity_v4 import js_side
 
     with sync_playwright() as p:
         with browser_ctx(p) as bp:

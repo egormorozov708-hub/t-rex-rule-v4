@@ -415,7 +415,7 @@ def wait_game(page, args, game_no, seed):
                   flush=True)
             page.evaluate("(t) => window.__watchStop(t)", True)
             break
-        if time.time() - last_csv > 330:
+        if getattr(args, "csv", "") and time.time() - last_csv > 330:
             print("CSV STALE >330s, abort", flush=True)
             os._exit(2)
 
@@ -428,7 +428,8 @@ def run_games(p, args, agent, table=None, dqn=None):
     if cw:
         cw.writerow(["game", "seed", "frames", "distanceRan", "status", "death"])
         fh.flush()
-    bkw, ctx = launch(p, viewport=args.viewport)
+    bkw, ctx = launch(p, headless=getattr(args, "headless", False),
+                      viewport=args.viewport)
     try:
         page = ctx.new_page()
         mute = prepare_page(page, agent, name, table or {}, dqn, args)
@@ -575,6 +576,8 @@ def main():
     ap.add_argument("--cap", type=int, default=20000)
     ap.add_argument("--raf-hz", type=int, default=60)
     ap.add_argument("--hud", action="store_true")
+    ap.add_argument("--headless", action="store_true",
+                    help="headless-браузер (звук выключен через --mute-audio)")
     ap.add_argument("--no-css", action="store_true",
                     help="не применять CSS-правку (для проверки до/после)")
     ap.add_argument("--csv", default="", help="CSV с результатами игр")
