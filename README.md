@@ -162,4 +162,4 @@ Parity на 200 000 кадров (7 seed) занимает ~25 мин (1476 с);
 - Узкого места в Python-вызовах нет: в быстром режиме один `page.evaluate` на игру; оптимизация не дала выигрыша ≥10%.
 - Тёмный режим удалён и не используется.
 
-Лицензия — [MIT](LICENSE). Релиз — [v1.0.1](https://github.com/egormorozov708-hub/t-rex-rule-v4/releases/tag/v1.0.1).
+Лицензия — [MIT](LICENSE). Релиз — [latest](https://github.com/egormorozov708-hub/t-rex-rule-v4/releases/latest).
