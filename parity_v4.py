@@ -207,51 +207,50 @@ def main():
                     help="регрессия: 20 игр по 1 000 000 кадров, seed 790000+")
     args = ap.parse_args()
     t0 = time.perf_counter()
-    with sync_playwright() as p:
-        with browser_ctx(p) as bp:
-            page = make_page(bp)
-            ok = True
-            if args.fast_check:
-                deaths = 0
-                for seed in range(790000, 790020):
-                    j = js_side(page, seed, 1000000)
-                    deaths += 1 if j["death"] else 0
-                    print("FAST", seed, j["frames"], round(j["score"], 1),
-                          "DEAD" if j["death"] else "CAP", "deaths", deaths,
-                          "wall", round(time.perf_counter() - t0, 1), flush=True)
-                print("FAST RESULT deaths", deaths, "/ 20", flush=True)
-                page.close()
-                return 0 if deaths == 0 else 1
-            if args.js_only:
-                for seed in args.seeds:
-                    j = js_side(page, seed, args.cap)
-                    good = j["frames"] >= args.cap and j["death"] is None
-                    ok = ok and good
-                    print("JS-ONLY", seed, j["frames"], round(j["score"], 1),
-                          "CAP" if good else "DEAD", flush=True)
-                page.close()
-                return 0 if ok else 1
+    with sync_playwright() as p, browser_ctx(p) as bp:
+        page = make_page(bp)
+        ok = True
+        if args.fast_check:
+            deaths = 0
+            for seed in range(790000, 790020):
+                j = js_side(page, seed, 1000000)
+                deaths += 1 if j["death"] else 0
+                print("FAST", seed, j["frames"], round(j["score"], 1),
+                      "DEAD" if j["death"] else "CAP", "deaths", deaths,
+                      "wall", round(time.perf_counter() - t0, 1), flush=True)
+            print("FAST RESULT deaths", deaths, "/ 20", flush=True)
+            page.close()
+            return 0 if deaths == 0 else 1
+        if args.js_only:
             for seed in args.seeds:
                 j = js_side(page, seed, args.cap)
-                py = py_side(page, seed, args.cap)
-                d = first_diff(j["actions"], py["actions"])
-                score_ok = round(j["score"], 2) == round(py["score"], 2)
-                frames_ok = j["frames"] == py["frames"]
-                marks_ok = j["marks"] == py["marks"]
-                good = d is None and score_ok and frames_ok and marks_ok
+                good = j["frames"] >= args.cap and j["death"] is None
                 ok = ok and good
-                print("PARITY", seed, "MATCH" if good else "MISMATCH",
-                      "frames", j["frames"], py["frames"],
-                      "score", round(j["score"], 2), round(py["score"], 2),
-                      "actions", len(j["actions"]), len(py["actions"]),
-                      "diff", d, "wall", round(time.perf_counter() - t0, 1),
-                      flush=True)
-                if not good:
-                    report(seed, d, j, py,
-                           (d if d is not None else min(j["frames"], py["frames"]) - 1))
-                    if args.first:
-                        break
+                print("JS-ONLY", seed, j["frames"], round(j["score"], 1),
+                      "CAP" if good else "DEAD", flush=True)
             page.close()
+            return 0 if ok else 1
+        for seed in args.seeds:
+            j = js_side(page, seed, args.cap)
+            py = py_side(page, seed, args.cap)
+            d = first_diff(j["actions"], py["actions"])
+            score_ok = round(j["score"], 2) == round(py["score"], 2)
+            frames_ok = j["frames"] == py["frames"]
+            marks_ok = j["marks"] == py["marks"]
+            good = d is None and score_ok and frames_ok and marks_ok
+            ok = ok and good
+            print("PARITY", seed, "MATCH" if good else "MISMATCH",
+                  "frames", j["frames"], py["frames"],
+                  "score", round(j["score"], 2), round(py["score"], 2),
+                  "actions", len(j["actions"]), len(py["actions"]),
+                  "diff", d, "wall", round(time.perf_counter() - t0, 1),
+                  flush=True)
+            if not good:
+                report(seed, d, j, py,
+                       (d if d is not None else min(j["frames"], py["frames"]) - 1))
+                if args.first:
+                    break
+        page.close()
     print("PARITY RESULT", "MATCH" if ok else "MISMATCH", flush=True)
     return 0 if ok else 1
 

@@ -75,13 +75,12 @@ def game_mode(seed):
     from fast_env import browser_ctx, make_page
     from parity_v4 import js_side
 
-    with sync_playwright() as p:
-        with browser_ctx(p) as bp:
-            page = make_page(bp)
-            try:
-                j = js_side(page, seed, CAP)
-            finally:
-                page.close()
+    with sync_playwright() as p, browser_ctx(p) as bp:
+        page = make_page(bp)
+        try:
+            j = js_side(page, seed, CAP)
+        finally:
+            page.close()
 
     last = j["last"]
     outcome = "DEATH" if j["death"] else "CAP"
@@ -97,38 +96,38 @@ def game_mode(seed):
                           "dist": last.get("dist2"), "gap": last.get("gap")},
             "actions60": j["actions"][-60:],
         }
-    out = RESULTS / ("night_game_%d.json" % seed)
+    out = RESULTS / f"night_game_{seed}.json"
     out.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
-    print("GAME %d %d %s" % (seed, j["frames"], outcome), flush=True)
+    print(f"GAME {seed} {j['frames']} {outcome}", flush=True)
 
 
 def summary(st, final=False, restarts_note=""):
     dfs = st["death_frames"]
     lines = ["# Ночной прогон rule_v4 (JS-эталон)", ""]
-    lines.append("- Обновлено: %s" % now().strftime("%Y-%m-%d %H:%M:%S"))
-    lines.append("- Игр: %d" % st["games"])
-    lines.append("- Смертей: %d" % st["deaths"])
-    lines.append("- Сумма кадров: %d" % st["total_frames"])
+    lines.append(f"- Обновлено: {now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"- Игр: {st['games']}")
+    lines.append(f"- Смертей: {st['deaths']}")
+    lines.append(f"- Сумма кадров: {st['total_frames']}")
     if dfs:
-        lines.append("- Кадров до смерти: min %d, median %.1f" %
-                     (min(dfs), statistics.median(dfs)))
-    lines.append("- Причины: " + (", ".join("%s %d" % (k, v)
+        lines.append(f"- Кадров до смерти: min {min(dfs)}, "
+                     f"median {statistics.median(dfs):.1f}")
+    lines.append("- Причины: " + (", ".join(f"{k} {v}"
                  for k, v in sorted(st["reasons"].items())) or "нет"))
     if final:
         lines.append("")
         lines.append("## Итог")
-        lines.append("- Кадров на одну смерть: %s" %
-                     ("%.1f" % (st["total_frames"] / st["deaths"])
-                      if st["deaths"] else "нет смертей"))
+        per_death = (f"{st['total_frames'] / st['deaths']:.1f}"
+                     if st["deaths"] else "нет смертей")
+        lines.append(f"- Кадров на одну смерть: {per_death}")
         if dfs:
-            lines.append("- Кадры до смерти: mean %.1f, median %.1f, min %d, max %d" %
-                         (statistics.mean(dfs), statistics.median(dfs),
-                          min(dfs), max(dfs)))
+            lines.append(f"- Кадры до смерти: mean {statistics.mean(dfs):.1f}, "
+                         f"median {statistics.median(dfs):.1f}, "
+                         f"min {min(dfs)}, max {max(dfs)}")
         total = sum(st["reasons"].values()) or 1
         lines.append("- Причины с долями: " + (", ".join(
-            "%s %d (%.1f%%)" % (k, v, 100.0 * v / total)
+            f"{k} {v} ({100.0 * v / total:.1f}%)"
             for k, v in sorted(st["reasons"].items())) or "нет"))
-        lines.append("- Перезапусков сторожа: %d" % st["restarts"])
+        lines.append(f"- Перезапусков сторожа: {st['restarts']}")
         if restarts_note:
             lines.append("- " + restarts_note)
     SUMMARY.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -148,8 +147,8 @@ def main():
     st = load_state()
     with CSV.open("a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(["seed", "frames", "distanceRan", "outcome"])
-    log("START seeds from %d, deadline %s, cap %d" %
-        (st["next_seed"], end.strftime("%H:%M"), CAP))
+    log(f"START seeds from {st['next_seed']}, "
+        f"deadline {end.strftime('%H:%M')}, cap {CAP}")
     t0 = time.time()
     last_status = 0.0
     last_summary = 0.0
@@ -178,10 +177,10 @@ def main():
             if tm - last_status >= 60:
                 last_status = tm
                 elapsed = max(1.0, tm - t0)
-                log("STATUS %s games %d deaths %d frames %d fps %.1f ETA %s" %
-                    (now().strftime("%H:%M"), st["games"], st["deaths"],
-                     st["total_frames"], st["total_frames"] / elapsed,
-                     str(end - now()).split(".")[0]))
+                log(f"STATUS {now().strftime('%H:%M')} games {st['games']} "
+                    f"deaths {st['deaths']} frames {st['total_frames']} "
+                    f"fps {st['total_frames'] / elapsed:.1f} "
+                    f"ETA {str(end - now()).split('.')[0]}")
             if tm - last_summary >= 600:
                 last_summary = tm
                 summary(st)
@@ -198,9 +197,9 @@ def main():
             child.wait()
             st["restarts"] += 1
             st["consecutive_restarts"] += 1
-            note = " watchdog: CSV stale %ds, seed %d убит, continue %d" % (
-                int(STALE), seed, seed + 1)
-            log("WATCHDOG RESTART %d for seed %d" % (st["restarts"], seed))
+            note = (f" watchdog: CSV stale {int(STALE)}s, seed {seed} убит, "
+                    f"continue {seed + 1}")
+            log(f"WATCHDOG RESTART {st['restarts']} for seed {seed}")
             save_state(st)
             summary(st)
             if st["consecutive_restarts"] >= MAX_CONSECUTIVE_RESTARTS:
@@ -210,10 +209,10 @@ def main():
             continue
 
         child.wait()
-        rec_path = RESULTS / ("night_game_%d.json" % seed)
+        rec_path = RESULTS / f"night_game_{seed}.json"
         if not rec_path.exists():
-            note = " missing result for seed %d" % seed
-            log("ERROR no result seed %d" % seed)
+            note = f" missing result for seed {seed}"
+            log(f"ERROR no result seed {seed}")
             save_state(st)
             continue
         rec = json.loads(rec_path.read_text(encoding="utf-8"))
@@ -231,12 +230,12 @@ def main():
         st["total_frames"] += rec["frames"]
         st["consecutive_restarts"] = 0
         save_state(st)
-        log("DONE seed %d %d %s | games %d deaths %d" %
-            (seed, rec["frames"], rec["outcome"], st["games"], st["deaths"]))
+        log(f"DONE seed {seed} {rec['frames']} {rec['outcome']} "
+            f"| games {st['games']} deaths {st['deaths']}")
 
     summary(st, final=True, restarts_note=note)
-    log("FINISH games %d deaths %d frames %d restarts %d" %
-        (st["games"], st["deaths"], st["total_frames"], st["restarts"]))
+    log(f"FINISH games {st['games']} deaths {st['deaths']} "
+        f"frames {st['total_frames']} restarts {st['restarts']}")
     return 0
 
 

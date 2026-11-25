@@ -17,17 +17,25 @@ import time
 
 def kill(pid):
     if os.name == "nt":
-        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        r = subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                           capture_output=True, text=True, check=False)
+        if r.returncode != 0:
+            print(f"WATCHDOG taskkill failed for pid {pid}: "
+                  f"{(r.stderr or r.stdout).strip() or 'unknown error'}",
+                  file=sys.stderr, flush=True)
     else:
         os.kill(pid, 15)
 
 
 def alive(pid):
     if os.name == "nt":
-        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"],
-                             capture_output=True, text=True).stdout
-        return str(pid) in out
+        r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"],
+                           capture_output=True, text=True, check=False)
+        if r.returncode != 0:
+            print(f"WATCHDOG tasklist failed: "
+                  f"{(r.stderr or r.stdout).strip() or 'unknown error'}",
+                  file=sys.stderr, flush=True)
+        return str(pid) in r.stdout
     try:
         os.kill(pid, 0)
         return True

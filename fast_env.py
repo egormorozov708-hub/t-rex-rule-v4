@@ -8,6 +8,11 @@ import time
 
 GAME_URL = "https://wayou.github.io/t-rex-runner/"
 DT = 1000.0 / 60.0
+CHROME_HINT = "Chrome не найден: установите системный Google Chrome (channel='chrome')."
+PLAYWRIGHT_HINT = ("Playwright не найден: python -m pip install -r requirements.txt; "
+                   "python -m playwright install chromium")
+NETWORK_HINT = ("Нет доступа к сети: проверьте интернет и "
+                "https://wayou.github.io/t-rex-runner/")
 
 PREP = """
 () => {
@@ -339,8 +344,16 @@ class FastGame:
 
 
 def make_page(browser):
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+    except ImportError as exc:
+        raise RuntimeError(PLAYWRIGHT_HINT) from exc
     page = browser.new_page(viewport={"width": 800, "height": 600})
-    page.goto(GAME_URL, wait_until="networkidle")
+    try:
+        page.goto(GAME_URL, wait_until="networkidle")
+    except PlaywrightError as exc:
+        page.close()
+        raise RuntimeError(NETWORK_HINT) from exc
     page.evaluate("""() => {
   const r = window.Runner.instance_;
   if (r) {
@@ -357,5 +370,13 @@ def make_page(browser):
 
 
 def browser_ctx(p):
-    return p.chromium.launch(channel="chrome", headless=True,
-                             args=["--disable-gpu", "--disable-extensions", "--mute-audio"])
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+    except ImportError as exc:
+        raise RuntimeError(PLAYWRIGHT_HINT) from exc
+    try:
+        return p.chromium.launch(
+            channel="chrome", headless=True,
+            args=["--disable-gpu", "--disable-extensions", "--mute-audio"])
+    except (PlaywrightError, OSError) as exc:
+        raise RuntimeError(CHROME_HINT) from exc

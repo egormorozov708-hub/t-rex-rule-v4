@@ -12,12 +12,19 @@ import argparse
 import csv
 import json
 import os
+import sys
 import time
+from contextlib import ExitStack
 from types import SimpleNamespace
 
-from playwright.sync_api import sync_playwright
+from fast_env import CHROME_HINT, DT, GAME_URL, NETWORK_HINT, PLAYWRIGHT_HINT
 
-from fast_env import DT, GAME_URL
+try:
+    from playwright.sync_api import Error as PlaywrightError
+    from playwright.sync_api import sync_playwright
+except ImportError as exc:
+    print(f"ERROR: {PLAYWRIGHT_HINT}", file=sys.stderr, flush=True)
+    raise SystemExit(2) from exc
 
 CHROME_ARGS = ["--disable-gpu", "--disable-extensions", "--mute-audio"]
 
@@ -352,16 +359,26 @@ INSTALL = r"""
 
 
 def launch(p, headless=False, viewport=None):
-    kw = dict(channel="chrome", headless=headless, args=CHROME_ARGS)
-    b = p.chromium.launch(**kw)
+    kw = {"channel": "chrome", "headless": headless, "args": CHROME_ARGS}
+    try:
+        b = p.chromium.launch(**kw)
+    except (PlaywrightError, OSError) as exc:
+        raise RuntimeError(CHROME_HINT) from exc
     if viewport is None:
         viewport = {"width": 1280, "height": 720}
     ctx = b.new_context(viewport=viewport, device_scale_factor=1)
     return b, ctx
 
 
+def goto_game(page):
+    try:
+        page.goto(GAME_URL, wait_until="networkidle")
+    except PlaywrightError as exc:
+        raise RuntimeError(NETWORK_HINT) from exc
+
+
 def prepare_page(page, agent, name, q, net, args):
-    page.goto(GAME_URL, wait_until="networkidle")
+    goto_game(page)
     apply_css(page, args)
     time.sleep(0.6)
     page.locator("canvas").click(force=True)
@@ -383,7 +400,7 @@ def wait_game(page, args, game_no, seed):
     t0 = time.perf_counter()
     last_print = t0
     last_progress = time.time()
-    last_csv = time.time()
+    last_beat = time.time()
     prev_frames = -1
     while page.evaluate("() => !!window.__watch.active"):
         time.sleep(0.25)
@@ -401,102 +418,102 @@ def wait_game(page, args, game_no, seed):
             print(f"  game {game_no}/{args.games} {int(now-t0)}s {st[0]}f "
                   f"{st[1]}d fps {fps:.1f} ETA {int(eta)}s "
                   f"speed {round(st[2],2)} deaths {st[3]}", flush=True)
-            if getattr(args, "csv", ""):
+        if getattr(args, "csv", ""):
+            wall = time.time()
+            if wall - last_beat >= 30.0:
                 try:
-                    with open(args.csv, "a", newline="", encoding="utf-8") as f:
-                        csv.writer(f).writerow(
-                            ["PROGRESS", game_no, seed, st[0], st[1],
-                             f"fps {fps:.1f} eta {int(eta)}s", ""])
-                    last_csv = time.time()
-                except OSError:
-                    pass
+                    os.utime(args.csv, None)
+                    last_beat = wall
+                except OSError as exc:
+                    print(f"CSV heartbeat failed: {exc}", file=sys.stderr,
+                          flush=True)
+            if wall - last_beat > 330:
+                print("CSV STALE >330s, abort", flush=True)
+                os._exit(2)
         if time.time() - last_progress > 60:
             print(f"  Прогресс не растёт 60 с: {prev_frames}f, TIMEOUT",
                   flush=True)
             page.evaluate("(t) => window.__watchStop(t)", True)
             break
-        if getattr(args, "csv", "") and time.time() - last_csv > 330:
-            print("CSV STALE >330s, abort", flush=True)
-            os._exit(2)
 
 
 def run_games(p, args, agent, table=None, dqn=None):
     name = args.agent
     csv_path = getattr(args, "csv", "")
-    fh = open(csv_path, "w", newline="", encoding="utf-8") if csv_path else None
-    cw = csv.writer(fh) if fh else None
-    if cw:
-        cw.writerow(["game", "seed", "frames", "distanceRan", "status", "death"])
-        fh.flush()
-    bkw, ctx = launch(p, headless=getattr(args, "headless", False),
-                      viewport=args.viewport)
-    try:
-        page = ctx.new_page()
-        mute = prepare_page(page, agent, name, table or {}, dqn, args)
-        print("audio", json.dumps(mute), flush=True)
-        deaths = 0
-        valid = 0
-        invalid = []
-        timeouts = []
-        for i in range(args.games):
-            seed = args.seed0 + i
-            page.evaluate("([s,i]) => window.__watchStart(s,i)", [seed, i + 1])
-            if args.screenshot:
-                time.sleep(2.0)
-                page.screenshot(path=args.screenshot)
-            wait_game(page, args, i + 1, seed)
-            r = page.evaluate("() => window.__watchStop()")
-            if r.get("timeout"):
-                timeouts.append(seed)
-                print(f"TIMEOUT seed {seed}: {r['frames']}f "
-                      f"fps {round(r['fps'],1)} progress-watchdog",
-                      flush=True)
+    with ExitStack() as stack:
+        fh = (stack.enter_context(open(csv_path, 'w', newline='', encoding='utf-8'))
+              if csv_path else None)
+        cw = csv.writer(fh) if fh else None
+        if cw:
+            cw.writerow(["game", "seed", "frames", "distanceRan", "status", "death"])
+            fh.flush()
+        bkw, ctx = launch(p, headless=getattr(args, "headless", False),
+                          viewport=args.viewport)
+        try:
+            page = ctx.new_page()
+            mute = prepare_page(page, agent, name, table or {}, dqn, args)
+            print("audio", json.dumps(mute), flush=True)
+            deaths = 0
+            valid = 0
+            invalid = []
+            timeouts = []
+            for i in range(args.games):
+                seed = args.seed0 + i
+                page.evaluate("([s,i]) => window.__watchStart(s,i)", [seed, i + 1])
+                if args.screenshot:
+                    time.sleep(2.0)
+                    page.screenshot(path=args.screenshot)
+                wait_game(page, args, i + 1, seed)
+                r = page.evaluate("() => window.__watchStop()")
+                if r.get("timeout"):
+                    timeouts.append(seed)
+                    print(f"TIMEOUT seed {seed}: {r['frames']}f "
+                          f"fps {round(r['fps'],1)} progress-watchdog",
+                          flush=True)
+                    if cw:
+                        cw.writerow([i + 1, seed, r["frames"],
+                                     round(r["score"], 1), "TIMEOUT", ""])
+                        fh.flush()
+                    time.sleep(2.0)
+                    continue
+                if r["frames"] < 100 and not r["death"]:
+                    invalid.append(seed)
+                    print(f"INVALID seed {seed}: {r['frames']}f без смерти от препятствия",
+                          flush=True)
+                    if cw:
+                        cw.writerow([i + 1, seed, r["frames"],
+                                     round(r["score"], 1), "INVALID", ""])
+                        fh.flush()
+                    time.sleep(2.0)
+                    continue
+                valid += 1
+                if r["death"]:
+                    deaths += 1
+                fps = r["frames"] / max(r["elapsed"], 0.001)
+                print(f"game {i+1} seed {seed}: {r['frames']}f "
+                      f"{round(r['score'],1)}d {round(fps,1)}fps "
+                      f"{'DEAD ' + json.dumps(r['death'], ensure_ascii=False) if r['death'] else 'CAP'}"
+                      "", flush=True)
                 if cw:
-                    cw.writerow([i + 1, seed, r["frames"],
-                                 round(r["score"], 1), "TIMEOUT", ""])
+                    cw.writerow([i + 1, seed, r["frames"], round(r["score"], 1),
+                                 "DEAD" if r["death"] else "CAP",
+                                 json.dumps(r["death"], ensure_ascii=False)
+                                 if r["death"] else ""])
                     fh.flush()
+                if r["marks"]:
+                    print("marks", json.dumps(r["marks"]), flush=True)
+                if args.trace and r["death"]:
+                    print("trace frame act y dist1 dist2", flush=True)
+                    for row in r["ring"]:
+                        print(" ".join(str(x) for x in row), flush=True)
                 time.sleep(2.0)
-                continue
-            if r["frames"] < 100 and not r["death"]:
-                invalid.append(seed)
-                print(f"INVALID seed {seed}: {r['frames']}f без смерти от препятствия",
-                      flush=True)
-                if cw:
-                    cw.writerow([i + 1, seed, r["frames"],
-                                 round(r["score"], 1), "INVALID", ""])
-                    fh.flush()
-                time.sleep(2.0)
-                continue
-            valid += 1
-            if r["death"]:
-                deaths += 1
-            fps = r["frames"] / max(r["elapsed"], 0.001)
-            print(f"game {i+1} seed {seed}: {r['frames']}f "
-                  f"{round(r['score'],1)}d {round(fps,1)}fps "
-                  f"{'DEAD ' + json.dumps(r['death'], ensure_ascii=False) if r['death'] else 'CAP'}"
-                  "", flush=True)
-            if cw:
-                cw.writerow([i + 1, seed, r["frames"], round(r["score"], 1),
-                             "DEAD" if r["death"] else "CAP",
-                             json.dumps(r["death"], ensure_ascii=False)
-                             if r["death"] else ""])
-                fh.flush()
-            if r["marks"]:
-                print("marks", json.dumps(r["marks"]), flush=True)
-            if args.trace and r["death"]:
-                print("trace frame act y dist1 dist2", flush=True)
-                for row in r["ring"]:
-                    print(" ".join(str(x) for x in row), flush=True)
-            time.sleep(2.0)
-        if args.games:
-            print("valid", valid, "deaths", deaths, "invalid", len(invalid),
-                  "invalid_seeds", invalid, "timeouts", len(timeouts),
-                  "timeout_seeds", timeouts, flush=True)
-        page.close()
-    finally:
-        bkw.close()
-        if fh:
-            fh.close()
+            if args.games:
+                print("valid", valid, "deaths", deaths, "invalid", len(invalid),
+                      "invalid_seeds", invalid, "timeouts", len(timeouts),
+                      "timeout_seeds", timeouts, flush=True)
+            page.close()
+        finally:
+            bkw.close()
 
 
 def watch_one(p, agent_spec, seed, seconds=60.0, cap=20000):
@@ -530,8 +547,8 @@ def compare_mode(p, args, table):
             prepare_page(page, agent, name, q, net, args)
             try:
                 page.evaluate("(x) => window.moveTo(x,0)", i * 1300)
-            except Exception:
-                pass
+            except (PlaywrightError, OSError) as exc:
+                print(f"moveTo skipped: {exc}", file=sys.stderr, flush=True)
             pages.append((page, agent))
         for page, agent in pages:
             page.evaluate("(s) => window.__watchStart(s,1)", args.seed0)
@@ -610,7 +627,7 @@ def main():
             try:
                 page = ctx.new_page()
                 print("playwright viewport", page.viewport_size, flush=True)
-                page.goto(GAME_URL, wait_until="networkidle")
+                goto_game(page)
                 print("BEFORE", json.dumps(page.evaluate(DIAGNOSE),
                                            ensure_ascii=False), flush=True)
                 apply_css(page, a)
@@ -626,4 +643,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr, flush=True)
+        sys.exit(2)
