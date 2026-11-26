@@ -28,14 +28,12 @@ PREP = """
 RESET = """
 () => {
   const r = window.Runner.instance_;
-  // restart() не очищает obstacleHistory и clouds — без этого один и тот же
-  // seed даёт разные игры в зависимости от предыдущей. Нормализуем ДО вызова.
   r.playingIntro = false;
   r.tRex.playingIntro = false;
   r.activated = true;
   r.horizon.obstacleHistory.length = 0;
   r.horizon.clouds = [];
-  r.restart();  // всегда: иначе после capped-игры distanceRan/frames продолжаются
+  r.restart();
   r.horizon.obstacleHistory.length = 0;
   r.horizon.clouds = [];
   r.scheduleNextUpdate = function () { this.updatePending = false; };
@@ -97,8 +95,6 @@ SNAP = """
 }
 """
 
-# action: 0=бежать, 1=прыжок, 2=присед; n кадров за один вызов.
-# Возвращает то же наблюдение, что и SNAP, чтобы один вызов = один шаг.
 STEP = """
 ([action, n, dt, seed]) => {
   const r = window.Runner.instance_;
@@ -110,8 +106,6 @@ STEP = """
       return x / 4294967296;
     };
   }
-  // Состояние для Python-зеркала: ссылка на препятствие, через которое начат прыжок.
-  // Физику не меняем — только запоминаем объект, как это делает JS-правило.
   if (action === 1 && !d.jumping && !d.ducking)
     window.__jumpObs = (r.horizon.obstacles || [])[0] || null;
   if (action === 3) window.__jumpObs = null;
@@ -181,10 +175,6 @@ STEP = """
 """
 
 
-# Один вызов = одна игра целиком. Физика та же (r.update() с dt=1000/60),
-# меняется только место вычисления правила — внутри страницы, без round-trip
-# на каждом кадре. Это нужно, чтобы сетка k/b с лимитом 50 000 кадров
-# укладывалась в разумное время.
 RULE_RUN = """
 ([seed, k, b, maxSteps, frameSkip, dt]) => {
   const r = window.Runner.instance_;
@@ -193,24 +183,19 @@ RULE_RUN = """
     x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
     return x / 4294967296;
   };
-  // Виртуальные часы: Runner.update() сам читает performance.now() и считает
-  // deltaTime. Реальный now даёт微секундный дрейф, который копится за 50 000
-  // кадров и ломает воспроизводимость seed. Фиксируем dt = DT точно.
   const realNow = performance.now.bind(performance);
-  let vnow = 0;                       // с нуля: одинаковые float-вычисления в каждой игре
+  let vnow = 0;
   performance.now = function () { return vnow; };
   r.scheduleNextUpdate = function () { this.updatePending = false; };
   cancelAnimationFrame(r.raqId);
   r.raqId = 0;
   r.updatePending = false;
-  // Нормализуем состояние ДО restart(): его внутренний update() тоже
-  // consumption Math.random (облака), иначе LCG стартует с разного сдвига.
   r.playingIntro = false;
   r.tRex.playingIntro = false;
   r.activated = true;
   r.horizon.obstacleHistory.length = 0;
   r.horizon.clouds = [];
-  r.restart();                       // раqId=0 => restart сработает всегда
+  r.restart();
   r.horizon.obstacleHistory.length = 0;
   r.horizon.clouds = [];
   r.playingIntro = false;
@@ -316,7 +301,6 @@ class FastGame:
         if speed is not None:
             self.page.evaluate("(v) => Runner.instance_.setSpeed(v)", speed)
         self.frames = 0
-        # 1 кадр, чтобы получить первое наблюдение
         if seed is not None:
             return self.seed_step(seed)
         return self.step(0, 1)

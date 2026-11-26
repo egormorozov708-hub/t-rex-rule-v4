@@ -124,7 +124,6 @@ INSTALL = r"""
   window.__watchInstalled = true;
   const r = window.Runner.instance_;
   const nativeCancelRAF = window.cancelAnimationFrame.bind(window);
-  // игра не должна сама ставить rAF: один управляемый цикл ниже
   window.requestAnimationFrame = function () { return 0; };
   window.cancelAnimationFrame = function (id) { nativeCancelRAF(id); };
   const realNow = performance.now.bind(performance);
@@ -207,7 +206,6 @@ INSTALL = r"""
     return a;
   }
   function rule4(s) {
-    // rule_v3 + одна ветка DROP (rule_v4.py)
     if (s.jumping && s.t1 === 'PTERODACTYL' && s.oy1 >= 95
         && w.jumpObs && w.jumpObs.remove) {
       w.jumpObs = null;
@@ -313,7 +311,6 @@ INSTALL = r"""
   const orig = r.update.bind(r);
   r.update = function () {
     if (!w.active || w.paused) return;
-    // фиксированный dt: скорость игры не зависит от частоты rAF
     w.virtual += w.dt * w.speedMult;
     performance.now = function () { return w.virtual; };
     const s = snap();

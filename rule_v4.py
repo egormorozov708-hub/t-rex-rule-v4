@@ -13,13 +13,6 @@ from rule_v3 import B, K, MIN_THRESHOLD, RuleV3
 
 NAME = "rule_v4"
 
-# Версия для встраивания в Runner.update(): те же поля, что в rule_v2.RULE_V2_JS.
-# Единственная ветка сверх правил v3:
-#   if (s.jumping && s.type === 'PTERODACTYL' && s.oy >= 95 &&
-#       state.jumpObs && state.jumpObs.remove) {
-#     state.jumpObs = null;
-#     return DROP;
-#   }
 
 
 class RuleV4(RuleV3):
@@ -68,10 +61,6 @@ class RuleV4(RuleV3):
 RULE = {"k": 17.0, "b": 0.0, "look_dist": 800.0,
         "frame_skip": 1, "name": NAME}
 
-# Единственный источник in-page логики rule_v4: используется parity_v4.py и
-# watch.py. Поля snapshot: type, oy, dist, type2, dist2, speed, jumping,
-# ducking. state.jumpObs — ссылка на препятствие, через которое начат прыжок.
-# Логика идентична Python-правилу выше; физика не затрагивается.
 RULE_V4_JS = r"""
 function ruleV4(s, state, obs) {
   const th = Math.max(25.0, 17.0 * s.speed + 0.0);

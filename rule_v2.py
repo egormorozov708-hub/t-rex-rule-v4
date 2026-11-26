@@ -20,13 +20,10 @@ from rule_v1 import (B, BIRD_DUCK_DIST, BIRD_DUCK_Y, BIRD_JUMP_EXTRA,
                      BIRD_JUMP_MIN_Y, FRAME_SKIP, K, MIN_THRESHOLD)
 
 NAME = "rule_v2"
-LOOK_DIST = 800.0          # px до второго CACTUS_LARGE
-DROP = 3                   # Rack action: штатный Trex.setSpeedDrop()
+LOOK_DIST = 800.0
+DROP = 3
 
-# Авторитетная реализация для встраивания в Runner.update() (без round-trip).
-# В rule_v2_drop_eval.py используется именно она.
 RULE_V2_JS = """
-// state: {jumpObs: null} — объект первого препятствия в текущем прыжке.
 function ruleV2(s, d, state) {
   const th = Math.max(25.0, K * s.speed + B);
   let a = 0;

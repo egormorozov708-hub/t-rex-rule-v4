@@ -16,7 +16,6 @@ B = 20.0
 FRAME_SKIP = 1
 MIN_THRESHOLD = 25.0
 
-# Птица: range yPos (включительно) -> действие.
 BIRD_JUMP_MIN_Y = 95
 BIRD_DUCK_Y = (60, 90)
 BIRD_DUCK_DIST = 260

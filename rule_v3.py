@@ -19,7 +19,6 @@ NAME = "rule_v3"
 B = 0.0
 
 RULE_V3_JS = """
-// Та же логика, что rule_v2.py, но B = 0.0.
 const th = Math.max(25.0, K * s.speed + 0.0);
 """
 
@@ -30,7 +29,6 @@ class RuleV3(RuleV2):
         self.jump_oid = None
 
     def choose_action(self, s):
-        # Полностью повторяем RuleV2, но с b=0: порог 17*speed вместо 17*speed+20.
         threshold = max(MIN_THRESHOLD, K * s["speed"] + B)
         if s["type"] == "PTERODACTYL":
             if 60 <= s["oy"] <= 90 and s["dist"] <= 260:

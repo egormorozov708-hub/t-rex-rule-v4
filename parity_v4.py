@@ -36,8 +36,6 @@ function parityReset(seed, dt) {
   r.playingIntro = false; d.playingIntro = false; r.activated = true;
   r.horizon.obstacleHistory.length = 0;
   r.horizon.clouds = [];
-  // restart() сам вызывает update() и берёт this.time из getTimeStamp():
-  // виртуальные часы должны быть уже включены ДО restart().
   performance.now = function () { return 0; };
   r.restart();
   r.horizon.obstacleHistory.length = 0;
@@ -77,7 +75,6 @@ function paritySnap() {
 }
 function parityApply(a) {
   const r = window.Runner.instance_, d = r.tRex;
-  // Ссылка на препятствие из прыжка — состояние для Python-зеркала.
   if (a === 1 && !d.jumping && !d.ducking)
     window.__parityJumpObs = (r.horizon.obstacles || [])[0] || null;
   if (a === 3) window.__parityJumpObs = null;
